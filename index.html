@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>메형의 SK하이닉스 원천징수 계산기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background:#0b1120; color:#e2e8f0; }
+    input[type=range] { -webkit-appearance:none; width:100%; background:transparent; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance:none; height:22px; width:22px; border-radius:50%; cursor:pointer;
+      background:#22d3ee; box-shadow:0 0 14px rgba(34,211,238,0.6); border:2px solid #0f172a; margin-top:-9px;
+    }
+    input[type=range]::-webkit-slider-runnable-track { width:100%; height:4px; background:#334155; border-radius:2px; }
+    .card { background: rgba(30,41,59,0.7); border:1px solid rgba(148,163,184,0.12); border-radius:16px; backdrop-filter:blur(12px); }
+    .chip { transition: all .15s; border: 1px solid #475569; }
+    .chip:hover { border-color: #64748b; }
+    .chip.active { background: linear-gradient(135deg,#3b82f6,#06b6d4); border-color:transparent; color:#fff; box-shadow:0 4px 14px rgba(6,182,212,0.35); }
+    .val-mono { font-family:'SFMono-Regular','Consolas','Monaco','Noto Sans KR',monospace; }
+    input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    .notice-bar { background: linear-gradient(90deg, rgba(6,182,212,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(34,211,238,0.25); }
+    .optional-section { background: rgba(15,23,42,0.4); border: 1px dashed rgba(148,163,184,0.15); }
+    .optional-label { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .calc-row { display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid rgba(148,163,184,0.08); align-items: center;}
+    .calc-row.last { border-bottom: 0; padding-bottom: 0; }
+    .calc-label { color: #94a3b8; font-size: 13px; }
+    .calc-val { font-family: 'SFMono-Regular','Consolas','Monaco','Noto Sans KR',monospace; font-size: 14px; color: #e2e8f0; text-align: right;}
+    .calc-val.yellow { color: #fbbf24; }
+    .calc-val.red { color: #f87171; }
+    .calc-val.green { color: #34d399; }
+    .calc-val.cyan { color: #22d3ee; }
+    .calc-val.pink { color: #f472b6; }
+    .calc-val.purple { color: #c084fc; }
+    .calc-val.violet { color: #8b5cf6; }
+    .summary-stat { background: rgba(15,23,42,0.5); border: 1px solid rgba(148,163,184,0.1); border-radius: 14px; padding: 20px; text-align: center; }
+    .summary-line { display:flex; justify-content:space-between; align-items:center; padding: 10px 0; border-bottom: 1px dashed rgba(148,163,184,0.15); }
+    .summary-line.last { border-bottom: 0; }
+    .pi-badge { background: rgba(244,114,182,0.15); border: 1px solid rgba(244,114,182,0.3); color: #f472b6; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .extra-badge { background: rgba(192,132,252,0.15); border: 1px solid rgba(192,132,252,0.3); color: #c084fc; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .step-num { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; font-size:11px; font-weight:700; margin-right:6px; }
+    .step-required { background: rgba(6,182,212,0.2); color: #22d3ee; border: 1px solid rgba(34,211,238,0.3); }
+    .hidden { display:none; }\n    .step-optional { background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+  </style>
+</head>
+<body class="min-h-screen px-4 py-6">
+ 
+  <header class="text-center mb-8">
+    <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-teal-300">
+      메형의 SK하이닉스 원천징수 계산기
+    </h1>
+    <p class="mt-2 text-slate-400 text-sm max-w-3xl mx-auto leading-relaxed">
+      노사 합의 기준 <strong class="text-cyan-300">영업이익의 10%</strong>를 성과급(PS) 재원으로 배분한다고 가정하고,<br class="hidden md:block">
+      <strong class="text-cyan-300">성과급 %, PI, 연봉, 추가 소득, 복지포인트, 개인연금 및 기타 공제에 따른</strong> 개인 예상 금액 및 실제 원천징수액을 계산합니다.
+    </p>
+  </header>
+ 
+  <main class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
+ 
+    <!-- 좌측: 입력 -->
+    <section class="lg:col-span-5 space-y-5">
+      <div class="card p-6 md:p-7">
+       
+        <!-- 안내 문구 -->
+        <div class="notice-bar rounded-xl px-4 py-3 mb-3 flex items-start gap-3">
+          <svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div class="text-sm text-cyan-100 leading-relaxed">
+            <strong class="text-cyan-300">아래 순서대로 입력하세요.</strong><br>
+            <span class="text-cyan-200 text-xs">파란 번호는 필수, 회색 번호는 선택입니다.</span>
+          </div>
+        </div>
+ 
+        <h2 class="text-blue-200 font-semibold mb-5 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          입력 조건
+        </h2>
+ 
+        <!-- ===== 필수 입력 ===== -->
+        <div class="mb-2">
+          <span class="text-xs font-semibold text-cyan-300 uppercase tracking-wider mb-3 block">필수 입력</span>
+        </div>
+ 
+        <!-- ① 영업이익 -->
+        <div class="mb-6">
+          <div class="flex justify-between items-end mb-2">
+            <label class="text-sm text-slate-300 flex items-center"><span class="step-num step-required">1</span>예상 연간 영업이익</label>
+            <span class="val-mono text-cyan-300 text-xl font-bold"><span id="disp-profit">250</span>조 원</span>
+          </div>
+          <input id="rng-profit" type="range" min="0" max="500" step="1" value="250">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 val-mono"><span>0조</span><span>125조</span><span>250조</span><span>375조</span><span>500조</span></div>
+          <div class="mt-3 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-profit" type="number" min="0" max="500" step="1" value="250" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-cyan-400 w-32 text-right">
+            <span class="text-sm text-slate-400">조 원</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">증권가 2026 전망(일부): 250조 원</p>
+        </div>
+ 
+        <!-- ② 재원 -->
+        <div class="mb-6">
+          <div class="flex justify-between items-end mb-2">
+            <label class="text-sm text-slate-300 flex items-center"><span class="step-num step-required">2</span>재원 (전체 기본급 총액)</label>
+            <span class="val-mono text-cyan-300 text-xl font-bold"><span id="disp-resource">1,700</span>억 원</span>
+          </div>
+          <input id="rng-resource" type="range" min="0" max="3000" step="10" value="1700">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 val-mono"><span>0</span><span>750억</span><span>1,500억</span><span>2,250억</span><span>3,000억</span></div>
+          <div class="mt-3 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-resource" type="number" min="0" max="3000" step="10" value="1700" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-cyan-400 w-32 text-right">
+            <span class="text-sm text-slate-400">억 원</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">성과급 % = (PS재원÷재원)×100. 예) 20조÷2,000억=<strong class="text-amber-300">10,000%</strong></p>
+        </div>
+ 
+        <!-- ③ 연봉 -->
+        <div class="mb-6">
+          <div class="flex justify-between items-end mb-2">
+            <label class="text-sm text-slate-300 flex items-center"><span class="step-num step-required">3</span>내 연봉</label>
+           <span class="val-mono text-cyan-300 text-xl font-bold"><span id="disp-salary">10,000만원</span></span>
+          </div>
+          <input id="rng-salary" type="range" min="0.5" max="2.0" step="0.1" value="1.0">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 val-mono"><span>5천만</span><span>8,750만</span><span>1억2,500만</span><span>1억6,250만</span><span>2억</span></div>
+          <div class="mt-3 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-salary" type="number" step="1" min="5000" max="20000" value="10000" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-cyan-400 w-36 text-right">
+            <span class="text-sm text-slate-400">만원</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">만원 단위로 입력 가능 (예: <strong class="text-cyan-300">5,638</strong> = 5,638만원)</p>
+        </div>
+ 
+        <!-- ④ PI -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="step-num step-required">4</span>
+            <label class="text-sm text-slate-300 font-medium">Productivity Incentive</label>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">연봉의 %로 지급 (500만원 기준). 상/하반기 각 최대 150%, 연간 최대 300%</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="flex justify-between items-end mb-1.5">
+                <span class="text-xs text-slate-300">상반기 PI</span>
+                <span class="val-mono text-pink-300 text-lg font-bold"><span id="disp-pi-h1">0</span>%</span>
+              </div>
+              <input id="rng-pi-h1" type="range" min="0" max="150" step="1" value="0">
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5 val-mono"><span>0%</span><span>75%</span><span>150%</span></div>
+              <div class="mt-2 flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700">
+                <input id="inp-pi-h1" type="number" min="0" max="150" step="1" value="0" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white val-mono focus:outline-none focus:border-pink-400 w-20 text-right">
+                <span class="text-xs text-slate-400">%</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between items-end mb-1.5">
+                <span class="text-xs text-slate-300">하반기 PI</span>
+                <span class="val-mono text-pink-300 text-lg font-bold"><span id="disp-pi-h2">0</span>%</span>
+              </div>
+              <input id="rng-pi-h2" type="range" min="0" max="150" step="1" value="0">
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5 val-mono"><span>0%</span><span>75%</span><span>150%</span></div>
+              <div class="mt-2 flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700">
+                <input id="inp-pi-h2" type="number" min="0" max="150" step="1" value="0" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white val-mono focus:outline-none focus:border-pink-400 w-20 text-right">
+                <span class="text-xs text-slate-400">%</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 bg-pink-500/10 border border-pink-500/20 rounded-lg px-3 py-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-pink-300 font-medium">총 PI 금액 <span class="text-slate-500 text-xs font-normal">(세전)</span></span>
+              <span class="val-mono text-white font-bold" id="disp-pi-total">0원</span>
+            </div>
+          </div>
+        </div>
+ 
+        <!-- ⑤ Hywel Point -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="step-num step-required">5</span>
+            <label class="text-sm text-slate-300 font-medium">Hywel Point <span class="text-slate-500 text-xs font-normal">(복지포인트)</span></label>
+          </div>
+          <div class="flex justify-between items-end mb-2">
+            <span class="text-xs text-slate-400">금액</span>
+            <span class="val-mono text-violet-300 text-xl font-bold"><span id="disp-hywel">0</span>만 원</span>
+          </div>
+          <div class="mt-3 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-hywel" type="number" min="0" max="10000" step="1" value="0" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-violet-400 w-36 text-right">
+            <span class="text-sm text-slate-400">만 원</span>
+          </div>
+          <div class="mt-2 bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-2">
+            <p class="text-xs text-slate-400">
+              <strong class="text-violet-300">2027년부터 증여세 10%</strong> 과세 예정. 현재는 근로소득에 포함되어 원천징수 대상입니다.
+            </p>
+          </div>
+        </div>
+ 
+        <!-- ===== 선택 입력 ===== -->
+        <div class="mb-2 pt-4 border-t border-slate-700">
+          <span class="optional-label uppercase tracking-wider mb-3 block flex items-center gap-2">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+            선택 입력 (해당 시)
+          </span>
+        </div>
+ 
+        <!-- ⑥ 추가 근로소득 -->
+        <div class="mb-5 optional-section rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="step-num step-optional">6</span>
+            <label class="text-sm text-slate-300 font-medium">추가 근로소득 <span class="text-slate-500 text-xs font-normal">(휴일/야간근로 등)</span></label>
+          </div>
+          <div class="flex justify-between items-end mb-2">
+            <span class="text-xs text-slate-400">금액</span>
+            <span class="val-mono text-purple-300 text-xl font-bold"><span id="disp-extra">0</span>만 원</span>
+          </div>
+          <div class="mt-2 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-extra" type="number" min="0" max="100000" step="1" value="0" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-purple-400 w-36 text-right">
+            <span class="text-sm text-slate-400">만 원</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">근로소득에 <strong class="text-purple-300">합산</strong>되어 원천징수(4대보험/소득세) 재계산</p>
+        </div>
+ 
+        <!-- ⑦ 개인연금 -->
+        <div class="mb-5 optional-section rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="step-num step-optional">7</span>
+            <label class="text-sm text-slate-300 font-medium">개인연금 <span class="text-slate-500 text-xs font-normal">(연금저축/연금보험 월납입액)</span></label>
+          </div>
+          <div class="flex justify-between items-end mb-2">
+            <label class="text-xs text-slate-400">월 납입액 (총액)</label>
+            <span class="val-mono text-emerald-300 text-xl font-bold"><span id="disp-pension">0</span>만 원</span>
+          </div>
+          <input id="rng-pension" type="range" min="0" max="40" step="1" value="0">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 val-mono"><span>0</span><span>10</span><span>20</span><span>30</span><span>40만</span></div>
+          <div class="mt-2 flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700">
+            <label class="text-xs text-slate-400 whitespace-nowrap">직접 입력</label>
+            <input id="inp-pension" type="number" min="0" max="40" step="1" value="0" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white val-mono focus:outline-none focus:border-emerald-400 w-32 text-right">
+            <span class="text-sm text-slate-400">만 원/월</span>
+          </div>
+          <div class="mt-2 space-y-1 text-xs text-slate-500">
+            <p>• <strong class="text-emerald-300">회사 50% 지원</strong> → 회사지원분이 근로소득에 포함 (가입하지 않으면 받지 못할 금액)</p>
+            <p>• 본인 부담 50%는 <strong>연봉 내 이미 포함</strong>된 금액</p>
+            <p>• 세액공제: 본인납입분 기준 <strong class="text-emerald-300">13.2%</strong> 적용 (5,500만원 초과 고소득)</p>
+          </div>
+        </div>
+ 
+        <!-- ⑧ 기타 공제 -->
+        <div class="mb-6 optional-section rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="step-num step-optional">8</span>
+            <label class="text-sm text-slate-300 font-medium">기타 공제 <span class="text-slate-500 text-xs font-normal">(기부·IRP·부양가족·신용카드 등)</span></label>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">각종 공제 항목을 하나씩 입력할 필요 없이 <strong>총액만</strong> 입력하세요.</p>
+         
+          <div class="grid grid-cols-2 gap-3">
+            <!-- 소득공제 -->
+            <div>
+              <div class="flex justify-between items-end mb-1.5">
+                <label class="text-xs text-slate-300">추가 소득공제</label>
+                <span class="val-mono text-orange-300 text-lg font-bold"><span id="disp-income-ded">0</span>만</span>
+              </div>
+              <div class="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700">
+                <input id="inp-income-ded" type="number" min="0" max="50000" step="10" value="0" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white val-mono focus:outline-none focus:border-orange-400 w-24 text-right">
+                <span class="text-xs text-slate-400">만 원</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-1">기부금·부양가족·주택임차차입금 이자 등 <span class="text-orange-300">과세표준 차감</span></p>
+            </div>
+            <!-- 세액공제 -->
+            <div>
+              <div class="flex justify-between items-end mb-1.5">
+                <label class="text-xs text-slate-300">추가 세액공제</label>
+                <span class="val-mono text-orange-300 text-lg font-bold"><span id="disp-tax-credit">0</span>만</span>
+              </div>
+              <div class="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700">
+                <input id="inp-tax-credit" type="number" min="0" max="50000" step="10" value="0" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white val-mono focus:outline-none focus:border-orange-400 w-24 text-right">
+                <span class="text-xs text-slate-400">만 원</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-1">IRP·자녀교육비·신용카드 등 <span class="text-orange-300">산출세액 차감</span></p>
+            </div>
+          </div>
+        </div>
+ 
+        <!-- 성과 등급 -->
+        <div class="mb-6">
+          <label class="text-sm text-slate-300 block mb-2 font-medium">성과 등급 배율</label>
+          <div class="grid grid-cols-3 gap-2" id="tier-btns">
+            <button data-v="0.700" class="chip py-3 rounded-lg text-sm font-medium text-slate-300">Improvement<div class="val-mono text-xs opacity-80 mt-0.5">0.7x</div></button>
+            <button data-v="1.000" class="chip py-3 rounded-lg text-sm font-medium text-slate-300 active">Normal<div class="val-mono text-xs opacity-80 mt-0.5">1.0x</div></button>
+            <button data-v="1.100" class="chip py-3 rounded-lg text-sm font-medium text-slate-300">High Performer<div class="val-mono text-xs opacity-80 mt-0.5">1.1x</div></button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">* 지급률: Improvement 70% / Normal 100% / High Performer 110%</p>
+        </div>
+ 
+        <!-- 현금 비율 -->
+        <div class="mb-6">
+          <div class="flex justify-between items-end mb-2">
+            <label class="text-sm text-slate-300">현금 지급 비율</label>
+            <span class="val-mono text-cyan-300 text-xl font-bold"><span id="disp-cash">50</span>%</span>
+          </div>
+          <input id="rng-cash" type="range" min="0" max="100" step="5" value="50">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 val-mono"><span>0%</span><span>50%</span><span>100%</span></div>
+          <p class="text-xs text-slate-500 mt-2">수정 합의안 기본: 현금 50% / 주식 50%</p>
+        </div>
+ 
+        <!-- 원천징수 반영 기준 -->
+        <div class="bg-slate-800/40 rounded-xl p-4 border border-slate-700 space-y-1.5">
+          <h4 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            원천징수 반영 기준
+          </h4>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            • 근로소득공제: 총급여 기준 누진(1억 초과 2%, 한도 2,000만원)<br>
+            • 국민연금: 기준소득월액 상한 <strong>659만원</strong>(2026년 7월 기준) 적용<br>
+            • 건강보험: 보수월액 상한 <strong>약 1억2,772만원</strong>(2026년) 적용<br>
+            • 장기요양: 건강보험의 13.14% / 고용보험: 총급여의 0.9%<br>
+            • 근로소득세액공제: 총급여 구간별 산출 (소득세법 시행령 제72조)<br>
+            • Hywel Point: 현재는 <strong>근로소득에 포함</strong>되어 원천징수 대상. <strong>2027년부터 증여세 10%</strong> 전환 예정<br>
+            • 개인연금: 회사지원 50%는 근로소득 포함, 본인납입액은 <strong>세액공제 13.2%</strong><br>
+            • 추가 소득공제: <strong>과세표준 차감</strong> / 추가 세액공제: <strong>산출세액 차감</strong>
+          </p>
+        </div>
+      </div>
+ 
+      <!-- 빠른 시나리오 -->
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold text-slate-200 mb-3">빠른 시나리오</h3>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="setScenario(47)" class="px-3 py-1.5 rounded-lg bg-slate-700/60 border border-slate-600 text-xs hover:border-cyan-400 transition">2025년 실적(47조)</button>
+          <button onclick="setScenario(100)" class="px-3 py-1.5 rounded-lg bg-slate-700/60 border border-slate-600 text-xs hover:border-cyan-400 transition">2026 보수(100조)</button>
+          <button onclick="setScenario(250)" class="px-3 py-1.5 rounded-lg bg-slate-700/60 border border-slate-600 text-xs hover:border-cyan-400 transition">2026 일부전망(250조)</button>
+          <button onclick="setScenario(500)" class="px-3 py-1.5 rounded-lg bg-slate-700/60 border border-slate-600 text-xs hover:border-cyan-400 transition">극대 시나리오(500조)</button>
+        </div>
+      </div>
+    </section>
+ 
+    <!-- 우측: 결과 -->
+    <section class="lg:col-span-7 space-y-5">
+      <!-- 기본 정보 -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="card p-5">
+          <div class="text-xs text-slate-400 mb-1 uppercase tracking-wider">총 PS 재원 (10%)</div>
+          <div class="val-mono text-2xl md:text-3xl font-bold text-blue-300" id="kpi-pool">25.0조</div>
+        </div>
+        <div class="card p-5">
+          <div class="text-xs text-slate-400 mb-1 uppercase tracking-wider">성과급 %</div>
+          <div class="val-mono text-2xl md:text-3xl font-bold text-amber-300" id="kpi-ps-pct">14,706%</div>
+        </div>
+      </div>
+ 
+      <!-- 소득 구성 요약 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card p-4">
+          <div class="text-xs text-slate-400 mb-1 uppercase tracking-wider">내 성과급</div>
+          <div class="val-mono text-lg font-bold text-cyan-300" id="kpi-ps-gross">-</div>
+        </div>
+        <div class="card p-4 border border-pink-500/20" style="background: linear-gradient(135deg, rgba(244,114,182,0.05), rgba(30,41,59,0.7));">
+          <div class="text-xs text-pink-300 mb-1 uppercase tracking-wider font-semibold">내 PI</div>
+          <div class="val-mono text-lg font-bold text-pink-300" id="kpi-pi-gross">-</div>
+        </div>
+        <div class="card p-4 border border-purple-500/20" style="background: linear-gradient(135deg, rgba(192,132,252,0.05), rgba(30,41,59,0.7));">
+          <div class="text-xs text-purple-300 mb-1 uppercase tracking-wider font-semibold">추가 근로</div>
+          <div class="val-mono text-lg font-bold text-purple-300" id="kpi-extra">-</div>
+        </div>
+        <div class="card p-4 border border-violet-500/20" style="background: linear-gradient(135deg, rgba(139,92,246,0.05), rgba(30,41,59,0.7));">
+          <div class="text-xs text-violet-300 mb-1 uppercase tracking-wider font-semibold">Hywel Point</div>
+          <div class="val-mono text-lg font-bold text-violet-300" id="kpi-hywel">-</div>
+        </div>
+      </div>
+ 
+      <!-- 원천징수 계산 과정 -->
+      <div class="card p-6 border border-amber-900/30" style="background: linear-gradient(160deg, rgba(30,41,59,0.8), rgba(30,20,10,0.5));">
+        <button type="button" id="withholding-toggle" class="w-full flex items-center justify-between gap-2 mb-5 text-left cursor-pointer group">
+          <span class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">원천징수</span>
+            <span class="text-lg font-semibold text-white">총 근로소득 원천징수 계산</span>
+          </span>
+          <svg id="withholding-chevron" class="w-5 h-5 text-slate-400 transition-transform duration-200 group-hover:text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+        </button>
+ 
+        <div id="withholding-details" class="space-y-0 mb-5">
+          <div class="calc-row"><span class="calc-label">연봉 (세전)</span><span class="calc-val cyan" id="wh-salary">-</span></div>
+          <div class="calc-row"><span class="calc-label">성과급 (세전)</span><span class="calc-val" id="wh-ps">-</span></div>
+          <div class="calc-row"><span class="calc-label">PI (세전) <span class="text-slate-500 text-[11px]">(상+하)</span></span><span class="calc-val pink" id="wh-pi">-</span></div>
+          <div class="calc-row"><span class="calc-label">Hywel Point <span class="text-slate-500 text-[11px]">(복지포인트, 근로소득 포함)</span></span><span class="calc-val violet" id="wh-hywel">-</span></div>
+          <div class="calc-row"><span class="calc-label">개인연금 회사지원금 <span class="text-slate-500 text-[11px]">(월×50%×12)</span></span><span class="calc-val green" id="wh-pension-support">-</span></div>
+          <div class="calc-row"><span class="calc-label">추가 근로소득 <span class="text-slate-500 text-[11px]">(휴일/야간 등)</span></span><span class="calc-val purple" id="wh-extra">-</span></div>
+          <div class="calc-row" style="border-top:1px solid rgba(148,163,184,0.2); padding-top:10px;">
+            <span class="calc-label font-semibold text-slate-200">= 총 급여 <span class="text-slate-500 text-[11px]">(근로소득 합계)</span></span>
+            <span class="calc-val cyan" id="wh-gross">-</span>
+          </div>
+          <div class="calc-row"><span class="calc-label">근로소득공제 <span class="text-slate-500 text-[11px]">(한도 2,000만원)</span></span><span class="calc-val yellow" id="wh-labor-ded">-</span></div>
+          <div class="calc-row"><span class="calc-label">= 근로소득금액</span><span class="calc-val" id="wh-labor-income">-</span></div>
+          <div class="calc-row"><span class="calc-label">　공제: 본인기본공제</span><span class="calc-val green" id="wh-personal">-150만원</span></div>
+          <div class="calc-row"><span class="calc-label">　공제: 국민연금 <span class="text-slate-500 text-[11px]">(월상한659만×4.75%×12)</span></span><span class="calc-val green" id="wh-np">-</span></div>
+          <div class="calc-row"><span class="calc-label">　공제: 건강보험료 <span class="text-slate-500 text-[11px]">(월상한약1억2,772만×3.595%×12)</span></span><span class="calc-val green" id="wh-hi">-</span></div>
+          <div class="calc-row"><span class="calc-label">　공제: 장기요양보험료</span><span class="calc-val green" id="wh-lt">-</span></div>
+          <div class="calc-row"><span class="calc-label">　공제: 고용보험료</span><span class="calc-val green" id="wh-ei">-</span></div>
+          <div class="calc-row"><span class="calc-label">　추가 소득공제 <span class="text-slate-500 text-[11px]">(기부·부양가족·주택임차차입금 등 일괄)</span></span><span class="calc-val green" id="wh-add-income-ded">-</span></div>
+          <div class="calc-row" style="border-top:1px solid rgba(148,163,184,0.2); padding-top:10px;"><span class="calc-label font-semibold text-slate-200">= 과세표준</span><span class="calc-val" id="wh-base">-</span></div>
+          <div class="calc-row"><span class="calc-label">　산출세액(종합소득세)</span><span class="calc-val red" id="wh-income-tax">-</span></div>
+          <div class="calc-row"><span class="calc-label">　근로소득세액공제 <span class="text-slate-500 text-[11px]">(소득세법 시행령 제72조)</span></span><span class="calc-val green" id="wh-tax-credit">-</span></div>
+          <div class="calc-row"><span class="calc-label">　연금저축 세액공제 <span class="text-slate-500 text-[11px]">(본인납입 분의 13.2%)</span></span><span class="calc-val green" id="wh-pension-credit">-</span></div>
+          <div class="calc-row"><span class="calc-label">　추가 세액공제 <span class="text-slate-500 text-[11px]">(IRP·자녀교육·신용카드 등 일괄)</span></span><span class="calc-val green" id="wh-add-tax-credit">-</span></div>
+          <div class="calc-row"><span class="calc-label">　지방소득세 <span class="text-slate-500 text-[11px]">((산출세액−세액공제들)×10%)</span></span><span class="calc-val red" id="wh-local-tax">-</span></div>
+          <div class="calc-row last" style="border-top:1px solid rgba(245,158,11,0.3); padding-top:10px; margin-top:4px;">
+            <span class="calc-label font-semibold text-amber-300">원천징수 합계 <span class="text-slate-500 text-[11px]">(4대보험+세금)</span></span>
+            <span class="calc-val font-bold text-amber-300" id="wh-total-ded">-</span>
+          </div>
+          <div class="calc-row last" style="padding-top:8px;">
+            <span class="calc-label font-semibold text-emerald-300 text-[15px]">★ 총 실수령액 (세후)</span>
+            <span class="calc-val font-bold text-emerald-300 text-[18px]" id="wh-net">-</span>
+          </div>
+        </div>
+      </div>
+ 
+      <!-- 최종 요약 카드 -->
+      <div class="card p-6 border border-emerald-900/30" style="background: linear-gradient(160deg, rgba(30,41,59,0.8), rgba(10,30,20,0.5));">
+        <div class="flex items-center gap-2 mb-5">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">결과 요약</span>
+          <h3 class="text-lg font-semibold text-white">세전 vs 세후</h3>
+        </div>
+ 
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="summary-stat">
+            <div class="text-xs text-slate-400 mb-2 uppercase tracking-wider">총 근로급여 (세전)</div>
+            <div class="val-mono text-2xl md:text-3xl font-bold text-blue-300" id="sum-gross">-</div>
+            <div class="text-[10px] text-slate-500 mt-1">연봉+PS+PI+추가+복지+지원</div>
+          </div>
+          <div class="summary-stat">
+            <div class="text-xs text-slate-400 mb-2 uppercase tracking-wider">총 공제액</div>
+            <div class="val-mono text-2xl md:text-3xl font-bold text-rose-300" id="sum-total-ded">-</div>
+            <div class="text-[10px] text-slate-500 mt-1">세금+4대보험</div>
+          </div>
+          <div class="summary-stat">
+            <div class="text-xs text-slate-400 mb-2 uppercase tracking-wider">총 실수령액 (세후)</div>
+            <div class="val-mono text-2xl md:text-3xl font-bold text-emerald-300" id="sum-net">-</div>
+            <div class="text-[10px] text-slate-500 mt-1">세후 현금+포인트+연금 합계</div>
+          </div>
+        </div>
+ 
+        <div class="bg-slate-900/40 rounded-xl p-5">
+          <div class="summary-line">
+            <span class="text-slate-300 text-sm">4대보험 합계</span>
+            <span class="val-mono text-amber-300" id="sum-4insu">-</span>
+          </div>
+          <div class="summary-line">
+            <span class="text-slate-300 text-sm">소득세 + 지방소득세 <span class="text-slate-500 text-xs">(근로소득 기준)</span></span>
+            <span class="val-mono text-rose-300" id="sum-tax-total">-</span>
+          </div>
+          <div class="summary-line">
+            <span class="text-emerald-300 text-sm">연금저축 세액공제 <span class="text-slate-500 text-xs">(본인납입 13.2%)</span></span>
+            <span class="val-mono text-emerald-300" id="sum-pension-credit">-</span>
+          </div>
+          <div class="summary-line last">
+            <span class="text-slate-200 text-sm font-semibold">총 세금 (소득세+지방세)</span>
+            <span class="val-mono text-rose-300 font-semibold" id="sum-all-tax">-</span>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center">
+            <span class="text-emerald-300 font-semibold text-base">실효세율 <span class="text-slate-500 text-xs font-normal">(총 공제÷총 근로급여)</span></span>
+            <span class="val-mono text-white font-bold text-xl" id="sum-eff-rate">-</span>
+          </div>
+        </div>
+      </div>
+ 
+      <!-- 지급 구성 -->
+      <div class="card p-6">
+        <h3 class="font-semibold text-slate-100 mb-4">지급 구성 (내 성과급 기준)</h3>
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-sm text-slate-300">현금</span>
+            <span class="val-mono text-white font-medium" id="cash-val">-</span>
+          </div>
+          <div class="w-full bg-slate-700/50 rounded-full h-3 mb-5">
+            <div id="bar-cash" class="bg-blue-500 h-3 rounded-full transition-all duration-300" style="width:50%"></div>
+          </div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-sm text-slate-300">자사주</span>
+            <span class="val-mono text-white font-medium" id="stock-val">-</span>
+          </div>
+          <div class="w-full bg-slate-700/50 rounded-full h-3">
+            <div id="bar-stock" class="bg-emerald-500 h-3 rounded-full transition-all duration-300" style="width:50%"></div>
+          </div>
+        </div>
+        <div class="h-48">
+          <canvas id="pieChart"></canvas>
+        </div>
+      </div>
+    </section>
+ 
+    <!-- 바닥: 추이 차트 -->
+    <section class="lg:col-span-12">
+      <div class="card p-6 md:p-8">
+        <h3 class="text-lg font-semibold text-slate-100 mb-1">영업이익에 따른 성과급 % 추이</h3>
+        <p class="text-xs text-slate-400 mb-6">재원 <span id="disp-res2">1,700</span>억 원 기준</p>
+        <div class="h-72">
+          <canvas id="lineChart"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+ 
+  <footer class="max-w-6xl mx-auto mt-8 text-center text-slate-500 text-xs px-4 pb-8 leading-relaxed">
+    <p>본 계산기는 공개된 노사 합의 및 세법(2026년 기준소득월액 상한 등)을 바탕으로 한 단순 추정 도구입니다.</p>
+    <p class="mt-1">실제 지급액 및 원천징수액은 회사 실적, 노사 합의, 개인 평가, 기본공제 항목, 세법 개정 등에 따라 달라질 수 있습니다.</p>
+  </footer>
+ 
+<script>
+  const $ = id => document.getElementById(id);
+  let state = { profit:250, resource:1700, mySalary:1.0, multiplier:1.000, cashRatio:50, piH1:0, piH2:0, extraIncome:0, hywelPoint:0, pensionMonthly:0, addIncomeDed:0, addTaxCredit:0 };
+ 
+  // 금액 표시: 1억원 미만은 만원 단위, 1억원 이상은 "억 + 만원"으로 표시
+  const fmtMoney = (val) => {
+    const won = Math.round(val);
+    const absWon = Math.abs(won);
+    const sign = won < 0 ? '-' : '';
+    if (absWon <= 100_000_000) {
+      return sign + Math.round(absWon / 10_000).toLocaleString('ko-KR') + '만원';
+    }
+    const eok = Math.floor(absWon / 100_000_000);
+    const man = Math.round((absWon % 100_000_000) / 10_000);
+    return sign + eok.toLocaleString('ko-KR') + '억' + (man > 0 ? ' ' + man.toLocaleString('ko-KR') + '만원' : '');
+  };
+
+  const fmt = (val, unit) => {
+    if(unit==='조') return (val/1e12).toFixed(1)+'조';
+    if(unit==='억') return fmtMoney(val);
+    if(unit==='%') return Math.round(val).toLocaleString('ko-KR')+'%';
+    if(unit==='원') return Math.round(val).toLocaleString('ko-KR')+'원';
+    return val;
+  };
+ 
+  // --- 누진세 ---
+  const taxBrackets = [
+    { limit: 14_000_000, rate: 0.06 },
+    { limit: 50_000_000, rate: 0.15 },
+    { limit: 88_000_000, rate: 0.24 },
+    { limit: 150_000_000, rate: 0.35 },
+    { limit: 300_000_000, rate: 0.38 },
+    { limit: 500_000_000, rate: 0.40 },
+    { limit: 1_000_000_000, rate: 0.42 },
+    { limit: Infinity, rate: 0.45 }
+  ];
+  function calcTax(income) {
+    let tax = 0, prev = 0;
+    for(const b of taxBrackets) { if(income <= prev) break; const t = Math.min(income, b.limit) - prev; tax += t * b.rate; prev = b.limit; }
+    return Math.floor(tax);
+  }
+ 
+  // --- 근로소득공제 ---
+  function calcLaborDeduction(totalPay) {
+    if(totalPay <= 5_000_000) return Math.floor(totalPay * 0.70);
+    if(totalPay <= 15_000_000) return Math.floor(3_500_000 + (totalPay - 5_000_000) * 0.40);
+    if(totalPay <= 45_000_000) return Math.floor(7_500_000 + (totalPay - 15_000_000) * 0.15);
+    if(totalPay <= 100_000_000) return Math.floor(12_000_000 + (totalPay - 45_000_000) * 0.05);
+    return Math.min(20_000_000, Math.floor(14_750_000 + (totalPay - 100_000_000) * 0.02));
+  }
+ 
+  // --- 근로소득세액공제 ---
+  function calcEarnedIncomeTaxCredit(totalPay, incomeTax) {
+    let credit = 0;
+    if (totalPay <= 33_000_000) credit = 740_000;
+    else if (totalPay <= 70_000_000) credit = Math.max(660_000, 740_000 - Math.floor((totalPay - 33_000_000) * 0.008));
+    else if (totalPay <= 120_000_000) credit = Math.max(500_000, 660_000 - Math.floor((totalPay - 70_000_000) * 0.005));
+    else credit = Math.max(200_000, 500_000 - Math.floor((totalPay - 120_000_000) * 0.005));
+    return Math.min(credit, incomeTax);
+  }
+ 
+  // DOM
+  const dispProfit = $('disp-profit'), dispResource = $('disp-resource'), dispSalary = $('disp-salary');
+  const dispCash = $('disp-cash'), dispRes2 = $('disp-res2');
+  const dispPiH1 = $('disp-pi-h1'), dispPiH2 = $('disp-pi-h2'), dispPiTotal = $('disp-pi-total');
+  const dispExtra = $('disp-extra'), dispHywel = $('disp-hywel'), dispPension = $('disp-pension');
+  const dispIncomeDed = $('disp-income-ded'), dispTaxCredit = $('disp-tax-credit');
+  const kpiPool = $('kpi-pool'), kpiPsPct = $('kpi-ps-pct');
+  const kpiPsGross = $('kpi-ps-gross'), kpiPiGross = $('kpi-pi-gross'), kpiExtra = $('kpi-extra'), kpiHywel = $('kpi-hywel');
+  const cashVal = $('cash-val'), stockVal = $('stock-val'), barCash = $('bar-cash'), barStock = $('bar-stock');
+  const inpSalary = $('inp-salary'), rngSalary = $('rng-salary');
+  const inpResource = $('inp-resource'), rngResource = $('rng-resource');
+  const inpProfit = $('inp-profit'), rngProfit = $('rng-profit');
+  const inpPiH1 = $('inp-pi-h1'), rngPiH1 = $('rng-pi-h1'), inpPiH2 = $('inp-pi-h2'), rngPiH2 = $('rng-pi-h2');
+  const inpExtra = $('inp-extra'), inpHywel = $('inp-hywel');
+  const inpPension = $('inp-pension'), rngPension = $('rng-pension');
+  const inpIncomeDed = $('inp-income-ded'), inpTaxCredit = $('inp-tax-credit');
+ 
+  // 원천징수 DOM
+  const whSalary = $('wh-salary'), whExtra = $('wh-extra'), whPs = $('wh-ps'), whPi = $('wh-pi'), whGross = $('wh-gross');
+  const whHywel = $('wh-hywel'), whPensionSupport = $('wh-pension-support');
+  const whLaborDed = $('wh-labor-ded'), whLaborIncome = $('wh-labor-income');
+  const whPersonal = $('wh-personal'), whNp = $('wh-np'), whHi = $('wh-hi'), whLt = $('wh-lt'), whEi = $('wh-ei');
+  const whAddIncomeDed = $('wh-add-income-ded'), whBase = $('wh-base'), whIncomeTax = $('wh-income-tax');
+  const whTaxCredit = $('wh-tax-credit'), whPensionCredit = $('wh-pension-credit'), whAddTaxCredit = $('wh-add-tax-credit'), whLocalTax = $('wh-local-tax');
+  const whTotalDed = $('wh-total-ded'), whNet = $('wh-net');
+ 
+  // 요약 카드 DOM
+  const sumGross = $('sum-gross'), sumTotalDed = $('sum-total-ded'), sumNet = $('sum-net');
+  const sum4Insu = $('sum-4insu'), sumTaxTotal = $('sum-tax-total'), sumPensionCredit = $('sum-pension-credit');
+  const sumAllTax = $('sum-all-tax'), sumEffRate = $('sum-eff-rate');
+ 
+  function calc() {
+    const totalPool = state.profit * 0.1 * 1_000_000_000_000;
+    const totalPoolEok = state.profit * 0.1 * 10000;
+    const psRatio = state.resource > 0 ? totalPoolEok / state.resource : 0;
+    const psPercent = psRatio * 100;
+ 
+    // 원 단위
+    const salaryWon = Math.round(state.mySalary * 1e8);
+    const extraIncomeWon = state.extraIncome * 10_000;
+    const myBonusWon = state.resource > 0
+      ? Math.floor(psRatio * 5_000_000 * state.mySalary * state.multiplier)
+      : 0;
+   
+    // PI
+    const piH1Won = Math.floor(state.piH1 / 100 * 5_000_000 * state.mySalary);
+    const piH2Won = Math.floor(state.piH2 / 100 * 5_000_000 * state.mySalary);
+    const totalPIWon = piH1Won + piH2Won;
+   
+    // Hywel Point (근로소득 합산)
+    const hywelPointWon = state.hywelPoint * 10_000;
+   
+    // 개인연금: 월 납입액(총액) 입력 → 회사 50% 지원분을 근로소득에 포함
+    const pensionMonthlyWon = state.pensionMonthly * 10_000; // 총 월 납입액(본인+회사)
+    const pensionCompanySupportWon = pensionMonthlyWon * 6; // 월×50%×12개월 = 회사지원 연간
+   
+    // 추가 공제
+    const addIncomeDedWon = state.addIncomeDed * 10_000; // 추가 소득공제
+   const addTaxCreditWon = state.addTaxCredit * 10_000; // 추가 세액공제
+   
+    // 총 근로소득
+    const totalPay = salaryWon + extraIncomeWon + myBonusWon + totalPIWon + hywelPointWon + pensionCompanySupportWon;
+ 
+    // 4대보험
+    const NP_MONTHLY_CAP = 6_590_000;
+   const monthlySalary = salaryWon / 12;
+    const npBase = Math.min(monthlySalary, NP_MONTHLY_CAP);
+    const npYear = Math.floor(npBase * 0.0475 * 12);
+ 
+    const HI_MONTHLY_CAP = 127_725_730;
+    const monthlyTotal = totalPay / 12;
+    const hiBase = Math.min(monthlyTotal, HI_MONTHLY_CAP);
+    const hiYear = Math.floor(hiBase * 0.03595 * 12);
+ 
+    const ltYear = Math.floor(hiYear * 0.1314);
+    const eiYear = Math.floor(totalPay * 0.009);
+ 
+    // 공제 및 과세표준
+    const laborDed = calcLaborDeduction(totalPay);
+    const laborIncome = totalPay - laborDed;
+    const personalDed = 1_500_000;
+    const taxBaseBeforeAdd = laborIncome - personalDed - npYear - hiYear - ltYear - eiYear;
+    // 추가 소득공제 반영 (과세표준에서 차감, 최소 0)
+    const taxBase = Math.max(0, taxBaseBeforeAdd - addIncomeDedWon);
+ 
+    // 세금
+    const incomeTax = calcTax(taxBase);
+    const taxCredit = calcEarnedIncomeTaxCredit(totalPay, incomeTax);
+   
+    // 연금저축 세액공제: 본인 납입액(월×50%)×12 기준, 한도 연 400만원
+    const annualPersonalPension = Math.min(Math.floor(pensionMonthlyWon * 0.5 * 12), 4_000_000);
+    const pensionCredit = Math.floor(annualPersonalPension * 0.132);
+   
+    // 지방소득세: (산출세액 - 근로소득세액공제 - 연금저축세액공제 - 추가세액공제) × 10%
+    const taxableForLocal = Math.max(0, incomeTax - taxCredit - pensionCredit - addTaxCreditWon);
+    const localTax = Math.round(taxableForLocal * 0.10);
+ 
+    const totalTax = taxableForLocal + localTax;
+    const totalInsu = npYear + hiYear + ltYear + eiYear;
+    const totalDeduction = totalInsu + totalTax;
+    const netPay = totalPay - totalDeduction;
+    const totalEff = totalPay > 0 ? ((totalDeduction / totalPay) * 100).toFixed(1) : 0;
+ 
+    return {
+      totalPool, psPercent, salaryWon, extraIncomeWon, myBonusWon, piH1Won, piH2Won, totalPIWon,
+      hywelPointWon, pensionCompanySupportWon, addIncomeDedWon, addTaxCreditWon, totalPay,
+      laborDed, laborIncome, personalDed, npYear, hiYear, ltYear, eiYear, taxBaseBeforeAdd, taxBase,
+      incomeTax, taxCredit, pensionCredit, localTax, totalTax, totalInsu, totalDeduction, netPay, totalEff
+    };
+  }
+ 
+  let skipProfitSync = false, skipResourceSync = false, skipSalarySync = false;
+  let skipPiH1Sync = false, skipPiH2Sync = false, skipPensionSync = false;
+ 
+  function render() {
+    const {
+      totalPool, psPercent, salaryWon, extraIncomeWon, myBonusWon, piH1Won, piH2Won, totalPIWon,
+      hywelPointWon, pensionCompanySupportWon, addIncomeDedWon, addTaxCreditWon, totalPay,
+      laborDed, laborIncome, personalDed, npYear, hiYear, ltYear, eiYear, taxBaseBeforeAdd, taxBase,
+      incomeTax, taxCredit, pensionCredit, localTax, totalTax, totalInsu, totalDeduction, netPay, totalEff
+    } = calc();
+ 
+    // 헤더
+    dispProfit.textContent = state.profit;
+    dispResource.textContent = state.resource.toLocaleString('ko-KR');
+    dispSalary.textContent = fmtMoney(salaryWon);
+    dispCash.textContent = state.cashRatio;
+    dispRes2.textContent = state.resource.toLocaleString('ko-KR');
+ 
+    // PI
+    dispPiH1.textContent = state.piH1;
+    dispPiH2.textContent = state.piH2;
+    dispPiTotal.textContent = fmt(totalPIWon, '원');
+ 
+    // 추가 입력
+    dispExtra.textContent = state.extraIncome.toLocaleString('ko-KR');
+    dispHywel.textContent = state.hywelPoint.toLocaleString('ko-KR');
+    dispPension.textContent = state.pensionMonthly.toLocaleString('ko-KR');
+    dispIncomeDed.textContent = state.addIncomeDed.toLocaleString('ko-KR');
+    dispTaxCredit.textContent = state.addTaxCredit.toLocaleString('ko-KR');
+ 
+    // KPI
+    kpiPool.textContent = fmt(totalPool, '조');
+    kpiPsPct.textContent = fmt(psPercent, '%');
+    kpiPsGross.textContent = fmt(myBonusWon, '억');
+    kpiPiGross.textContent = fmt(totalPIWon, '억');
+    kpiExtra.textContent = fmt(extraIncomeWon, '억');
+    kpiHywel.textContent = fmt(hywelPointWon, '억');
+ 
+    // 원천징수 과정
+    whSalary.textContent = fmt(salaryWon, '억');
+    whExtra.textContent = fmt(extraIncomeWon, '억');
+    whPs.textContent = fmt(myBonusWon, '억');
+    whPi.textContent = fmt(totalPIWon, '억') + ` (상${fmt(piH1Won,'억')}+하${fmt(piH2Won,'억')})`;
+    whHywel.textContent = fmt(hywelPointWon, '억');
+    whPensionSupport.textContent = fmt(pensionCompanySupportWon, '억');
+    whGross.textContent = fmt(totalPay, '억');
+    whLaborDed.textContent = '-' + fmt(laborDed, '억');
+    whLaborIncome.textContent = fmt(laborIncome, '억');
+    whPersonal.textContent = '-' + fmt(personalDed, '억');
+    whNp.textContent = '-' + fmt(npYear, '억');
+    whHi.textContent = '-' + fmt(hiYear, '억');
+    whLt.textContent = '-' + fmt(ltYear, '억');
+    whEi.textContent = '-' + fmt(eiYear, '억');
+    whAddIncomeDed.textContent = (addIncomeDedWon > 0 ? '-' : '') + fmt(addIncomeDedWon, '억');
+    whBase.textContent = fmt(taxBase, '억');
+    whIncomeTax.textContent = fmt(incomeTax, '억');
+    whTaxCredit.textContent = '-' + fmt(taxCredit, '억');
+    whPensionCredit.textContent = '-' + fmt(pensionCredit, '억');
+    whAddTaxCredit.textContent = (addTaxCreditWon > 0 ? '-' : '') + fmt(addTaxCreditWon, '억');
+    whLocalTax.textContent = fmt(localTax, '억');
+    whTotalDed.textContent = '-' + fmt(totalDeduction, '억');
+    whNet.textContent = fmt(netPay, '억');
+ 
+    // 요약 카드
+    sumGross.textContent = fmt(totalPay, '억');
+    sumTotalDed.textContent = fmt(totalDeduction, '억');
+    sumNet.textContent = fmt(netPay, '억');
+    sum4Insu.textContent = fmt(totalInsu, '억');
+    sumTaxTotal.textContent = fmt(totalTax, '억');
+    sumPensionCredit.textContent = fmt(pensionCredit, '억');
+    sumAllTax.textContent = fmt(totalTax, '억');
+    sumEffRate.textContent = totalEff + '%';
+ 
+    // 현금/주식
+    const cashAmt = myBonusWon * state.cashRatio/100;
+    const stockAmt = myBonusWon * (100-state.cashRatio)/100;
+    cashVal.textContent = fmt(cashAmt, '억');
+    stockVal.textContent = fmt(stockAmt, '억');
+    barCash.style.width = state.cashRatio + '%';
+    barStock.style.width = (100-state.cashRatio) + '%';
+ 
+    // 싱크
+    if(!skipProfitSync) { inpProfit.value = state.profit; }
+    if(!skipResourceSync) { inpResource.value = state.resource; }
+    if(!skipSalarySync) { inpSalary.value = Math.round(state.mySalary * 10000); rngSalary.value = Math.max(0.5, Math.min(2.0, state.mySalary)); }
+    if(!skipPiH1Sync) { inpPiH1.value = state.piH1; rngPiH1.value = state.piH1; }
+    if(!skipPiH2Sync) { inpPiH2.value = state.piH2; rngPiH2.value = state.piH2; }
+    if(!skipPensionSync) { inpPension.value = state.pensionMonthly; rngPension.value = Math.min(40, state.pensionMonthly); }
+    inpExtra.value = state.extraIncome;
+    inpHywel.value = state.hywelPoint;
+    inpIncomeDed.value = state.addIncomeDed;
+    inpTaxCredit.value = state.addTaxCredit;
+ 
+    updatePie(myBonusWon);
+    updateLine();
+  }
+ 
+  // 이벤트 바인딩
+  rngProfit.addEventListener('input', e=>{ state.profit=+e.target.value; skipProfitSync=false; render(); });
+  inpProfit.addEventListener('input', e=>{ let v=parseFloat(e.target.value); if(isNaN(v)){skipProfitSync=true;return;} if(v<0)v=0;if(v>500)v=500; state.profit=Math.round(v); rngProfit.value=Math.max(0,Math.min(500,state.profit)); skipProfitSync=true; render(); });
+  inpProfit.addEventListener('blur', ()=>{ let v=parseFloat(inpProfit.value); if(isNaN(v)||v<0)v=0; if(v>500)v=500; state.profit=Math.round(v); skipProfitSync=false; render(); });
+  inpProfit.addEventListener('keydown', e=>{ if(e.key==='Enter') inpProfit.blur(); });
+ 
+  rngResource.addEventListener('input', e=>{ state.resource=+e.target.value; skipResourceSync=false; render(); });
+  inpResource.addEventListener('input', e=>{ let v=parseFloat(e.target.value); if(isNaN(v)){skipResourceSync=true;return;} if(v<0)v=0;if(v>3000)v=3000; state.resource=Math.round(v); rngResource.value=Math.max(0,Math.min(3000,state.resource)); skipResourceSync=true; render(); });
+  inpResource.addEventListener('blur', ()=>{ let v=parseFloat(inpResource.value); if(isNaN(v)||v<0)v=0; if(v>3000)v=3000; state.resource=Math.round(v); skipResourceSync=false; render(); });
+  inpResource.addEventListener('keydown', e=>{ if(e.key==='Enter') inpResource.blur(); });
+ 
+  rngSalary.addEventListener('input', e=>{ state.mySalary=+e.target.value; skipSalarySync=false; render(); });
+  inpSalary.addEventListener('input', e=>{ const raw=e.target.value; if(raw===''){skipSalarySync=true;return;} let v=parseFloat(raw); if(isNaN(v)){skipSalarySync=true;return;} if(v<5000)v=5000; if(v>20000)v=20000; state.mySalary=v/10000; rngSalary.value=Math.max(0.5,Math.min(2.0,state.mySalary)); skipSalarySync=true; render(); });
+  function finalizeSalary(){ let v=parseFloat(inpSalary.value); if(isNaN(v)||v<5000)v=5000; if(v>20000)v=20000; state.mySalary=v/10000; skipSalarySync=false; render(); }
+  inpSalary.addEventListener('blur', finalizeSalary); inpSalary.addEventListener('keydown', e=>{ if(e.key==='Enter') finalizeSalary(); });
+ 
+  // 추가 근로소득
+  inpExtra.addEventListener('input', e=>{ let v=parseInt(e.target.value)||0; if(v<0)v=0; state.extraIncome=v; render(); });
+  inpExtra.addEventListener('blur', ()=>{ let v=parseInt(inpExtra.value)||0; if(v<0)v=0; state.extraIncome=v; render(); });
+ 
+  // Hywel Point
+  inpHywel.addEventListener('input', e=>{ let v=parseInt(e.target.value)||0; if(v<0)v=0; state.hywelPoint=v; render(); });
+  inpHywel.addEventListener('blur', ()=>{ let v=parseInt(inpHywel.value)||0; if(v<0)v=0; state.hywelPoint=v; render(); });
+ 
+  // 개인연금
+  rngPension.addEventListener('input', e=>{ state.pensionMonthly=+e.target.value; skipPensionSync=false; render(); });
+  inpPension.addEventListener('input', e=>{ let v=parseInt(e.target.value); if(isNaN(v)){skipPensionSync=true;return;} if(v<0)v=0; if(v>40)v=40; state.pensionMonthly=v; rngPension.value=Math.min(40, v); skipPensionSync=true; render(); });
+  inpPension.addEventListener('blur', ()=>{ let v=parseInt(inpPension.value); if(isNaN(v)||v<0)v=0; if(v>40)v=40; state.pensionMonthly=v; skipPensionSync=false; render(); });
+  inpPension.addEventListener('keydown', e=>{ if(e.key==='Enter') inpPension.blur(); });
+ 
+  // PI
+  rngPiH1.addEventListener('input', e=>{ state.piH1=+e.target.value; skipPiH1Sync=false; render(); });
+  inpPiH1.addEventListener('input', e=>{ let v=parseInt(e.target.value); if(isNaN(v)){skipPiH1Sync=true;return;} if(v<0)v=0; if(v>150)v=150; state.piH1=v; rngPiH1.value=v; skipPiH1Sync=true; render(); });
+  inpPiH1.addEventListener('blur', ()=>{ let v=parseInt(inpPiH1.value); if(isNaN(v)||v<0)v=0; if(v>150)v=150; state.piH1=v; skipPiH1Sync=false; render(); });
+ 
+  rngPiH2.addEventListener('input', e=>{ state.piH2=+e.target.value; skipPiH2Sync=false; render(); });
+  inpPiH2.addEventListener('input', e=>{ let v=parseInt(e.target.value); if(isNaN(v)){skipPiH2Sync=true;return;} if(v<0)v=0; if(v>150)v=150; state.piH2=v; rngPiH2.value=v; skipPiH2Sync=true; render(); });
+  inpPiH2.addEventListener('blur', ()=>{ let v=parseInt(inpPiH2.value); if(isNaN(v)||v<0)v=0; if(v>150)v=150; state.piH2=v; skipPiH2Sync=false; render(); });
+ 
+  // 추가 공제 이벤트
+  inpIncomeDed.addEventListener('input', e=>{ let v=parseInt(e.target.value)||0; if(v<0)v=0; state.addIncomeDed=v; render(); });
+  inpIncomeDed.addEventListener('blur', ()=>{ let v=parseInt(inpIncomeDed.value)||0; if(v<0)v=0; state.addIncomeDed=v; render(); });
+  inpTaxCredit.addEventListener('input', e=>{ let v=parseInt(e.target.value)||0; if(v<0)v=0; state.addTaxCredit=v; render(); });
+  inpTaxCredit.addEventListener('blur', ()=>{ let v=parseInt(inpTaxCredit.value)||0; if(v<0)v=0; state.addTaxCredit=v; render(); });
+ 
+  $('rng-cash').addEventListener('input', e=>{ state.cashRatio=+e.target.value; render(); });
+ 
+  document.querySelectorAll('#tier-btns button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#tier-btns button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.multiplier = parseFloat(btn.dataset.v);
+      render();
+    });
+  });
+ 
+  function setScenario(v){ state.profit=v; rngProfit.value=v; skipProfitSync=false; render(); }
+ 
+  // 차트
+  let pieInst=null, lineInst=null;
+  function initCharts(){
+    const { myBonusWon } = calc();
+    pieInst = new Chart($('pieChart'), {
+      type:'doughnut', data:{ labels:['현금','자사주'], datasets:[{ data:[myBonusWon*state.cashRatio/100, myBonusWon*(100-state.cashRatio)/100], backgroundColor:['#3b82f6','#10b981'], borderWidth:0, hoverOffset:4 }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{position:'bottom',labels:{color:'#cbd5e1',usePointStyle:true}} } }
+    });
+ 
+    const labels=[], data=[];
+    for(let p=0; p<=500; p+=50){ labels.push(p+'조'); data.push(state.resource>0 ? (p*0.1*10000/state.resource)*100 : 0); }
+    const idx = Math.round(state.profit/50);
+    const radii = labels.map((_,i)=> i===idx ? 7 : 0);
+    const pointColors = labels.map((_,i)=> i===idx ? '#f472b6' : 'rgba(245,158,11,0.12)');
+   
+    lineInst = new Chart($('lineChart'), {
+      type:'line', data:{ labels, datasets:[{
+        label:'성과급 %', data,
+        borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.08)',
+        fill:true, tension:0.4,
+        pointBackgroundColor: pointColors, pointBorderColor:'#f59e0b', pointRadius:radii, pointHoverRadius:radii.map((v,i)=> i===idx?9:5)
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        scales:{ x:{ ticks:{color:'#94a3b8'}, grid:{color:'#334155'} }, y:{ ticks:{color:'#94a3b8', callback:v=>Math.round(v).toLocaleString('ko-KR')+'%'}, grid:{color:'#334155'} } },
+        plugins:{ tooltip:{ backgroundColor:'rgba(15,23,42,0.9)', titleColor:'#e2e8f0', bodyColor:'#f59e0b', callbacks:{ label:ctx=>Math.round(ctx.raw).toLocaleString('ko-KR')+'%' } }, legend:{ labels:{color:'#cbd5e1'} } }
+      }
+    });
+  }
+ 
+  function updatePie(mine){ if(!pieInst) return; pieInst.data.datasets[0].data=[mine*state.cashRatio/100, mine*(100-state.cashRatio)/100]; pieInst.update(); }
+  function updateLine(){
+    if(!lineInst) return;
+    const labels=[], data=[];
+    for(let p=0; p<=500; p+=50){ labels.push(p+'조'); data.push(state.resource>0 ? (p*0.1*10000/state.resource)*100 : 0); }
+    const idx = Math.round(state.profit/50);
+    lineInst.data.labels = labels; lineInst.data.datasets[0].data = data;
+    lineInst.data.datasets[0].pointBackgroundColor = labels.map((_,i)=> i===idx ? '#f472b6' : 'rgba(245,158,11,0.12)');
+    lineInst.data.datasets[0].pointRadius = labels.map((_,i)=> i===idx ? 7 : 0);
+    lineInst.data.datasets[0].pointHoverRadius = labels.map((_,i)=> i===idx ? 9 : 5);
+    lineInst.update();
+  }
+ 
+  // 원천징수 계산 상세 접기/펼치기
+  const withholdingToggle = $('withholding-toggle');
+  const withholdingDetails = $('withholding-details');
+  const withholdingChevron = $('withholding-chevron');
+  withholdingToggle.addEventListener('click', () => {
+    const isOpen = !withholdingDetails.classList.contains('hidden');
+    withholdingDetails.classList.toggle('hidden', isOpen);
+    withholdingChevron.classList.toggle('rotate-180', !isOpen);
+  });
+
+  render();
+  window.addEventListener('load', initCharts);
+</script>
+</body>
+</html>
